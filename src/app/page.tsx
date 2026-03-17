@@ -69,6 +69,10 @@ export default function Home() {
   const [searchResults, setSearchResults] = useState<BusRoute[]>([]);
   const [isSearching, setIsSearching] = useState(false);
 
+  React.useEffect(() => {
+    handleMyLocation();
+  }, []);
+
   const handleFindRoute = () => {
     if (!origin || !destination) return;
 
@@ -192,7 +196,7 @@ export default function Home() {
                             }
                           }}
                           className="w-full bg-transparent border-none p-0 text-slate-900 dark:text-slate-100 focus:ring-0 placeholder:text-slate-400 font-medium outline-none"
-                          placeholder="Current location"
+                          placeholder="Enter starting point..."
                         />
                       </div>
                     </div>
