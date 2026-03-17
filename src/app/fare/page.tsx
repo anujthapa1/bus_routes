@@ -4,6 +4,9 @@ import { useState } from 'react';
 import Header from "@/components/Header";
 import BottomNav from "@/components/BottomNav";
 import Sidebar from "@/components/Sidebar";
+import GoogleMap from "@/components/GoogleMap";
+
+const GOOGLE_MAPS_API_KEY = "AIzaSyCZV9usZJxPfhkm1xsLURfkY8fndcBH-Bo";
 
 export default function FarePage() {
   const [fareType, setFareType] = useState('standard');
@@ -27,6 +30,7 @@ export default function FarePage() {
             {/* Map Section */}
             <div className="relative flex-1 min-h-[300px] lg:h-auto border-r border-slate-200 dark:border-slate-800">
               <div className="absolute inset-0 bg-slate-200 dark:bg-slate-900 overflow-hidden">
+                <GoogleMap apiKey={GOOGLE_MAPS_API_KEY} center={{ lat: 28.2096, lng: 83.9856 }} />
                 <img
                   alt="Map of Pokhara"
                   className="w-full h-full object-cover opacity-80 dark:opacity-50 grayscale-[20%]"
