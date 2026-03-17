@@ -7,6 +7,7 @@ import BottomNav from "@/components/BottomNav";
 import Sidebar from "@/components/Sidebar";
 import MapComponent from "@/components/MapComponent";
 import PlaceAutocomplete from "@/components/PlaceAutocomplete";
+import ZoomControls from "@/components/ZoomControls";
 
 const POKHARA_CENTER = { lat: 28.2096, lng: 83.9856 };
 
@@ -63,14 +64,7 @@ export default function Home() {
 
               {/* Floating Map Controls */}
               <div className="absolute right-4 top-4 flex flex-col gap-2 z-10">
-                <div className="flex flex-col bg-white dark:bg-slate-800 rounded-lg shadow-lg overflow-hidden border border-slate-200 dark:border-slate-700">
-                  <button className="p-3 hover:bg-slate-50 dark:hover:bg-slate-700 border-b border-slate-200 dark:border-slate-700 transition-colors">
-                    <span className="material-symbols-outlined text-slate-700 dark:text-slate-200">add</span>
-                  </button>
-                  <button className="p-3 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
-                    <span className="material-symbols-outlined text-slate-700 dark:text-slate-200">remove</span>
-                  </button>
-                </div>
+                <ZoomControls />
                 <button
                   onClick={handleMyLocation}
                   className="flex size-12 items-center justify-center rounded-lg bg-white dark:bg-slate-800 shadow-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
