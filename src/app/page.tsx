@@ -8,13 +8,86 @@ import Sidebar from "@/components/Sidebar";
 import MapComponent from "@/components/MapComponent";
 import PlaceAutocomplete from "@/components/PlaceAutocomplete";
 import ZoomControls from "@/components/ZoomControls";
+import RouteResults from "@/components/RouteResults";
 
 const POKHARA_CENTER = { lat: 28.2096, lng: 83.9856 };
+
+interface BusRoute {
+  id: number;
+  name: string;
+  stops: string[];
+  frequency: string;
+  baseFare: number;
+  status: string;
+  color: string;
+  calculatedFare?: number;
+}
+
+const ROUTES_DATA: BusRoute[] = [
+  {
+    id: 1,
+    name: "Route 1: Lakeside → Mahendrapul",
+    stops: ["Lakeside", "Hallan Chowk", "Sahid Chowk", "Prithvi Chowk", "Hospital Chowk", "Mahendrapul"],
+    frequency: "Every 10 mins",
+    baseFare: 25,
+    status: "Active",
+    color: "green"
+  },
+  {
+    id: 4,
+    name: "Route 4: Bagar → Chhorepatan",
+    stops: ["Bagar", "PN Campus", "Bindhyabasini", "Chipledhunga", "Birauta", "Chhorepatan"],
+    frequency: "Every 15 mins",
+    baseFare: 30,
+    status: "Active",
+    color: "green"
+  },
+  {
+    id: 7,
+    name: "Route 7: Lamachaur → Sedi",
+    stops: ["Lamachaur", "WRC Campus", "Hari Chowk", "Zero KM", "Lakeside North", "Sedi"],
+    frequency: "Every 30 mins",
+    baseFare: 35,
+    status: "Limited",
+    color: "amber"
+  },
+  {
+    id: 11,
+    name: "Route 11: Malepatan → Lekhnath",
+    stops: ["Malepatan", "Parsyang", "Srijana Chowk", "Amarsingh", "Bijayapur", "Talchowk", "Lekhnath"],
+    frequency: "Every 20 mins",
+    baseFare: 40,
+    status: "Active",
+    color: "green"
+  }
+];
 
 export default function Home() {
   const [mapCenter, setMapCenter] = useState(POKHARA_CENTER);
   const [origin, setOrigin] = useState<google.maps.places.PlaceResult | null>(null);
   const [destination, setDestination] = useState<google.maps.places.PlaceResult | null>(null);
+  const [searchResults, setSearchResults] = useState<BusRoute[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+
+  const handleFindRoute = () => {
+    if (!origin || !destination) return;
+
+    setIsSearching(true);
+
+    // Mock matching logic:
+    // In a real app, this would use a routing engine or check if any route
+    // has stops near both origin and destination coordinates.
+    // For this demo, we'll return a subset of routes.
+    setTimeout(() => {
+      const results = ROUTES_DATA.map(route => ({
+        ...route,
+        calculatedFare: route.baseFare // In real app, calculate based on distance
+      })).slice(0, 2);
+
+      setSearchResults(results);
+      setIsSearching(false);
+    }, 800);
+  };
 
   const handleMyLocation = () => {
     if (navigator.geolocation) {
@@ -147,10 +220,22 @@ export default function Home() {
                         <span className="material-symbols-outlined">swap_vert</span>
                       </button>
                     </div>
-                    <button className="mt-2 w-full bg-primary hover:bg-primary/90 text-white font-bold py-4 rounded-xl shadow-lg shadow-primary/25 transition-all flex items-center justify-center gap-2">
-                      <span className="material-symbols-outlined">directions_bus</span>
-                      Find Best Route
+                    <button
+                      onClick={handleFindRoute}
+                      disabled={isSearching || !origin || !destination}
+                      className="mt-2 w-full bg-primary hover:bg-primary/90 disabled:bg-slate-300 text-white font-bold py-4 rounded-xl shadow-lg shadow-primary/25 transition-all flex items-center justify-center gap-2"
+                    >
+                      {isSearching ? (
+                        <div className="h-5 w-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                      ) : (
+                        <>
+                          <span className="material-symbols-outlined">directions_bus</span>
+                          Find Best Route
+                        </>
+                      )}
                     </button>
+
+                    <RouteResults results={searchResults} />
                   </div>
 
                   {/* Quick Landmarks */}
