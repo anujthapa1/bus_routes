@@ -31,6 +31,11 @@ export default function FarePage() {
             <div className="relative flex-1 min-h-[300px] lg:h-auto border-r border-slate-200 dark:border-slate-800">
               <div className="absolute inset-0 bg-slate-200 dark:bg-slate-900 overflow-hidden">
                 <GoogleMap apiKey={GOOGLE_MAPS_API_KEY} center={{ lat: 28.2096, lng: 83.9856 }} />
+                <img
+                  alt="Map of Pokhara"
+                  className="w-full h-full object-cover opacity-80 dark:opacity-50 grayscale-[20%]"
+                  src="https://lh3.googleusercontent.com/aida-public/AB6AXuBmSztXrGZthiDozUQeKW-uhxJbNxDy7aDUoGJm1uvlKBNFnHt05FBTX8kU64_weMUCOjnNLuSFb78wCysBsen-2C7Oxqmfoa-ISk6Lob9S2PVqnyRzLQo45hlIf2X0IpcO5xnjUg7I3GpVh_ohiy6Nna2wGt_NCeAiEPYE8BIn6DF03gyfnF3sFFUxRbt-Bal3Y2OczxyO40RBPqGU9NmkvSnU-1e5MEYpekHANK4LkwaQRtEAT49Jq8rwujm1aqEZF_CfuT9Xe824"
+                />
                 <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                   <div className="relative w-full h-full">
                     <svg className="absolute inset-0 w-full h-full" fill="none" viewBox="0 0 800 600" xmlns="http://www.w3.org/2000/svg">
