@@ -1,35 +1,25 @@
 "use client";
 
-import React from 'react';
-import { useMap } from '@vis.gl/react-google-maps';
+import React from "react";
 
-export default function ZoomControls() {
-  const map = useMap();
+interface ZoomControlsProps {
+  onZoomIn: () => void;
+  onZoomOut: () => void;
+}
 
-  const handleZoomIn = () => {
-    if (map) {
-      map.setZoom((map.getZoom() || 13) + 1);
-    }
-  };
-
-  const handleZoomOut = () => {
-    if (map) {
-      map.setZoom((map.getZoom() || 13) - 1);
-    }
-  };
-
+export default function ZoomControls({ onZoomIn, onZoomOut }: ZoomControlsProps) {
   return (
-    <div className="flex flex-col bg-white dark:bg-slate-800 rounded-lg shadow-lg overflow-hidden border border-slate-200 dark:border-slate-700">
+    <div className="flex flex-col overflow-hidden rounded-lg border border-slate-200 bg-white shadow-lg dark:border-slate-700 dark:bg-slate-800">
       <button
-        onClick={handleZoomIn}
-        className="p-3 hover:bg-slate-50 dark:hover:bg-slate-700 border-b border-slate-200 dark:border-slate-700 transition-colors"
+        onClick={onZoomIn}
+        className="border-b border-slate-200 p-3 transition-colors hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-700"
         aria-label="Zoom in"
       >
         <span className="material-symbols-outlined text-slate-700 dark:text-slate-200">add</span>
       </button>
       <button
-        onClick={handleZoomOut}
-        className="p-3 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+        onClick={onZoomOut}
+        className="p-3 transition-colors hover:bg-slate-50 dark:hover:bg-slate-700"
         aria-label="Zoom out"
       >
         <span className="material-symbols-outlined text-slate-700 dark:text-slate-200">remove</span>

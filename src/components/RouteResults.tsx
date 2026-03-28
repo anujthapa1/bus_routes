@@ -36,7 +36,7 @@ export default function RouteResults({ results }: RouteResultsProps) {
             </div>
           </div>
           <div className="text-right">
-            <p className="text-sm font-bold text-primary">NPR {result.calculatedFare?.toFixed(2)}</p>
+            <p className="text-sm font-bold text-primary">NPR {Math.round(result.calculatedFare ?? 0)}</p>
             {index === 0 && (
               <span className="inline-block px-1.5 py-0.5 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 text-[8px] font-bold rounded uppercase tracking-tighter">
                 Fewest transfers

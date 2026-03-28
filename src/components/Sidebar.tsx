@@ -20,7 +20,7 @@ export default function Sidebar() {
           <span className="material-symbols-outlined">payments</span>
           <span className="font-semibold">Fares</span>
         </Link>
-        <Link href="#" className="flex items-center gap-3 px-4 py-3 rounded-xl text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all">
+        <Link href="/schedules" className="flex items-center gap-3 px-4 py-3 rounded-xl text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all">
           <span className="material-symbols-outlined">history</span>
           <span className="font-semibold">Schedules</span>
         </Link>

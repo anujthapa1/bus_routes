@@ -16,9 +16,9 @@ export default function BottomNav() {
           <span className="material-symbols-outlined">map</span>
           <span className="text-[10px] font-bold">Map</span>
         </Link>
-        <Link href="#" className="flex flex-col items-center gap-1 text-slate-400 hover:text-primary transition-colors">
-          <span className="material-symbols-outlined">settings</span>
-          <span className="text-[10px] font-bold">Settings</span>
+        <Link href="/schedules" className="flex flex-col items-center gap-1 text-slate-400 hover:text-primary transition-colors">
+          <span className="material-symbols-outlined">history</span>
+          <span className="text-[10px] font-bold">Schedules</span>
         </Link>
       </nav>
     </footer>
