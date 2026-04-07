@@ -53,7 +53,7 @@ function estimateDurationMin(distanceKm: number): number {
 interface RouteRecommendation extends BusRouteDefinition {
   calculatedFare?: number;
 }
-
+  
 interface NoRouteGuide {
   boardingStop: string;
   dropOffStop: string;
@@ -67,31 +67,10 @@ interface NoRouteGuide {
 }
 
 type LocalVehicleType = "indrive-bike" | "indrive-car" | "bus";
-const SIMPANI_INFORMATICS_BIKE_FARE_NPR = 130;
-const SIMPANI_INFORMATICS_CAR_FARE_NPR = 420;
-const SIMPANI_INFORMATICS_BUS_FARE_NPR = 45;
 
 function normalizeSearchText(value: string): string {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 }
-
-function isSimpaniInformaticsRoute(origin: GeoapifyPlace | null, destination: GeoapifyPlace | null): boolean {
-  if (!origin || !destination) {
-    return false;
-  }
-
-  const originText = normalizeSearchText(`${origin.name} ${origin.formatted}`);
-  const destinationText = normalizeSearchText(`${destination.name} ${destination.formatted}`);
-
-  const originHasSimpani = originText.includes("simpani");
-  const destinationHasInformatics =
-    (destinationText.includes("informatics") && destinationText.includes("college")) ||
-    (destinationText.includes("informatics") && destinationText.includes("pokhara"));
-  const destinationHasShalomMarg = destinationText.includes("shalom marg");
-
-  return originHasSimpani && (destinationHasInformatics || destinationHasShalomMarg);
-}
-
 
 function toRadians(value: number): number {
   return (value * Math.PI) / 180;
@@ -290,13 +269,8 @@ export default function Home() {
   const [isSearching, setIsSearching] = useState(false);
   const [isAutoCalculating, setIsAutoCalculating] = useState(false);
   const [routeError, setRouteError] = useState<string | null>(null);
-  const [preferredVehicle, setPreferredVehicle] = useState<LocalVehicleType>("indrive-bike");
   const originPos = origin ? { lat: origin.lat, lng: origin.lng } : null;
   const destinationPos = destination ? { lat: destination.lat, lng: destination.lng } : null;
-  const isMatchedSimpaniInformatics = useMemo(
-    () => isSimpaniInformaticsRoute(origin, destination),
-    [origin?.name, origin?.formatted, destination?.name, destination?.formatted],
-  );
 
   const tripDistanceKm = useMemo(() => {
     if (routeSummary?.distanceKm && routeSummary.distanceKm > 0) {
@@ -309,68 +283,6 @@ export default function Home() {
 
     return null;
   }, [routeSummary?.distanceKm, originPos?.lat, originPos?.lng, destinationPos?.lat, destinationPos?.lng]);
-
-  const localVehicleFare = useMemo(() => {
-    if (isMatchedSimpaniInformatics) {
-      const selectedFareLabel =
-        preferredVehicle === "indrive-bike"
-          ? `NPR ${SIMPANI_INFORMATICS_BIKE_FARE_NPR}`
-          : preferredVehicle === "indrive-car"
-            ? `NPR ${SIMPANI_INFORMATICS_CAR_FARE_NPR}`
-            : `NPR ${SIMPANI_INFORMATICS_BUS_FARE_NPR}`;
-
-      return {
-        bikeFare: SIMPANI_INFORMATICS_BIKE_FARE_NPR,
-        carFareMin: SIMPANI_INFORMATICS_CAR_FARE_NPR,
-        carFareMax: SIMPANI_INFORMATICS_CAR_FARE_NPR,
-        busFareMin: SIMPANI_INFORMATICS_BUS_FARE_NPR,
-        busFareMax: SIMPANI_INFORMATICS_BUS_FARE_NPR,
-        selectedFareLabel,
-      };
-    }
-
-    if (tripDistanceKm === null) {
-      return {
-        bikeFare: 0,
-        carFareMin: 0,
-        carFareMax: 0,
-        busFareMin: 20,
-        busFareMax: 50,
-        selectedFareLabel: "Select both locations to see fare",
-      };
-    }
-
-    const bikeFare = Math.round(tripDistanceKm * 20);
-    const carFareMin = Math.round(tripDistanceKm * 25);
-    const carFareMax = Math.round(tripDistanceKm * 30);
-    const busFareMin = 20;
-    const busFareMax = 50;
-
-    const selectedFareLabel =
-      preferredVehicle === "indrive-bike"
-        ? `NPR ${bikeFare}`
-        : preferredVehicle === "indrive-car"
-          ? `NPR ${carFareMin} - ${carFareMax}`
-          : `NPR ${busFareMin} - ${busFareMax}`;
-
-    return {
-      bikeFare,
-      carFareMin,
-      carFareMax,
-      busFareMin,
-      busFareMax,
-      selectedFareLabel,
-    };
-  }, [tripDistanceKm, preferredVehicle, isMatchedSimpaniInformatics]);
-
-  const carFareText =
-    localVehicleFare.carFareMin === localVehicleFare.carFareMax
-      ? String(localVehicleFare.carFareMax)
-      : `${localVehicleFare.carFareMin} - ${localVehicleFare.carFareMax}`;
-  const busFareText =
-    localVehicleFare.busFareMin === localVehicleFare.busFareMax
-      ? String(localVehicleFare.busFareMax)
-      : `${localVehicleFare.busFareMin} - ${localVehicleFare.busFareMax}`;
 
   useEffect(() => {
     if (originPos && destinationPos) {
@@ -393,7 +305,7 @@ export default function Home() {
   }, [originPos?.lat, originPos?.lng, destinationPos?.lat, destinationPos?.lng]);
 
   const getRouteEstimate = useCallback(
-    async (originPoint: MapPoint, destinationPoint: MapPoint, signal?: AbortSignal) => {
+    async (originPoint: MapPoint, destinationPoint: MapPoint, signal?: AbortSignal, vehicleType: "bus" | "bike" | "car" = "car") => {
       const response = await fetch("/api/routing", {
         method: "POST",
         headers: {
@@ -403,6 +315,7 @@ export default function Home() {
           origin: originPoint,
           destination: destinationPoint,
           mode: "drive",
+          vehicleType,
         }),
         signal,
       });
@@ -435,9 +348,9 @@ export default function Home() {
     (estimatedFareNpr: number) =>
       BUS_ROUTES.slice(0, 2).map((route, index) => ({
         ...route,
-        calculatedFare: isMatchedSimpaniInformatics ? SIMPANI_INFORMATICS_BUS_FARE_NPR : estimatedFareNpr + index * 5,
+        calculatedFare: estimatedFareNpr + index * 5,
       })),
-    [isMatchedSimpaniInformatics],
+    [],
   );
 
   useEffect(() => {
@@ -452,9 +365,7 @@ export default function Home() {
 
       try {
         const routeEstimate = await getRouteEstimate(originPos, destinationPos, controller.signal);
-        const adjustedFareNpr = isMatchedSimpaniInformatics
-          ? SIMPANI_INFORMATICS_BUS_FARE_NPR
-          : routeEstimate.estimatedFareNpr;
+        const adjustedFareNpr = routeEstimate.estimatedFareNpr;
         setRoutePath(routeEstimate.path);
         setRouteSummary({
           distanceKm: routeEstimate.distanceKm,
@@ -494,7 +405,6 @@ export default function Home() {
     destinationPos?.lng,
     getRouteEstimate,
     buildRouteRecommendations,
-    isMatchedSimpaniInformatics,
   ]);
 
   const handleFindRoute = async () => {
@@ -517,9 +427,7 @@ export default function Home() {
           : await getRouteEstimate(originPos, destinationPos);
       const routeEstimate = {
         ...routeEstimateRaw,
-        estimatedFareNpr: isMatchedSimpaniInformatics
-          ? SIMPANI_INFORMATICS_BUS_FARE_NPR
-          : routeEstimateRaw.estimatedFareNpr,
+        estimatedFareNpr: routeEstimateRaw.estimatedFareNpr,
       };
 
       if (!routeSummary || routePath.length === 0) {
@@ -554,18 +462,7 @@ export default function Home() {
         const destinationStopNameHint = resolveStopName(
           `${destination?.name ?? ""} ${destination?.formatted ?? ""}`.trim(),
         );
-        const guide = isMatchedSimpaniInformatics
-          ? {
-              boardingStop: "Simpani",
-              dropOffStop: "Gandaki Hospital",
-              busesNeeded: 1,
-              estimatedFareNpr: SIMPANI_INFORMATICS_BUS_FARE_NPR,
-              routeNames: ["Micro Bus: Simpani -> Gandaki Hospital"],
-              walkToBoardKm: 0,
-              walkFromDropKm: 0.8,
-              guidance: "Walk from Gandaki Hospital to Informatics College Pokhara.",
-            }
-          : buildNoRouteGuide(originPos, destinationPos, originStopNameHint, destinationStopNameHint);
+        const guide = buildNoRouteGuide(originPos, destinationPos, originStopNameHint, destinationStopNameHint);
         const fallbackDistanceKm = Math.max(0.1, distanceKmBetween(originPos, destinationPos));
         const fallbackDurationMin = estimateDurationMin(fallbackDistanceKm);
 
@@ -711,8 +608,8 @@ GEOAPIFY_API_KEY=your_key_here
               </button>
             </div>
 
-            <div className="absolute bottom-0 left-0 right-0 z-[1000] p-4">
-              <div className="mx-auto max-w-xl rounded-xl border border-slate-200 bg-white p-5 shadow-2xl dark:border-slate-700 dark:bg-slate-800">
+            <div className="absolute bottom-4 left-0 right-0 z-[1000] p-4 md:bottom-0">
+              <div className="mx-auto max-w-xl rounded-xl border border-slate-200 bg-white p-5 shadow-2xl dark:border-slate-700 dark:bg-slate-800 max-h-[80vh] overflow-y-auto md:max-h-none md:overflow-visible">
                 <div className="mb-4 flex items-center justify-center md:hidden">
                   <div className="h-1.5 w-12 rounded-full bg-slate-200 dark:bg-slate-700"></div>
                 </div>
@@ -765,78 +662,6 @@ GEOAPIFY_API_KEY=your_key_here
                     <button className="flex items-center justify-center rounded-full bg-primary/10 p-2 text-primary">
                       <span className="material-symbols-outlined">swap_vert</span>
                     </button>
-                  </div>
-
-                  <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-900/60">
-                    <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400">
-                      Which local vechile do you want?
-                    </p>
-
-                    <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-3">
-                      <button
-                        type="button"
-                        onClick={() => setPreferredVehicle("indrive-bike")}
-                        className={`rounded-lg border p-2 text-left transition-colors ${
-                          preferredVehicle === "indrive-bike"
-                            ? "border-primary bg-primary/10 text-primary"
-                            : "border-slate-200 bg-white text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
-                        }`}
-                      >
-                        <p className="text-xs font-semibold">InDrive Bike</p>
-                        <p className="text-[11px]">Approx NPR {localVehicleFare.bikeFare}</p>
-                        <p className="text-[10px] opacity-75">NPR 20 per km</p>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => setPreferredVehicle("indrive-car")}
-                        className={`rounded-lg border p-2 text-left transition-colors ${
-                          preferredVehicle === "indrive-car"
-                            ? "border-primary bg-primary/10 text-primary"
-                            : "border-slate-200 bg-white text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
-                        }`}
-                      >
-                        <p className="text-xs font-semibold">InDrive Car</p>
-                        <p className="text-[11px]">
-                          Approx NPR {carFareText}
-                        </p>
-                        <p className="text-[10px] opacity-75">NPR 25 - 30 per km</p>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => setPreferredVehicle("bus")}
-                        className={`rounded-lg border p-2 text-left transition-colors ${
-                          preferredVehicle === "bus"
-                            ? "border-primary bg-primary/10 text-primary"
-                            : "border-slate-200 bg-white text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
-                        }`}
-                      >
-                        <p className="text-xs font-semibold">Bus</p>
-                        <p className="text-[11px]">Approx NPR {busFareText}</p>
-                        <p className="text-[10px] opacity-75">Short city trips</p>
-                      </button>
-                    </div>
-
-                    {tripDistanceKm !== null ? (
-                      <p className="mt-2 text-[11px] text-slate-600 dark:text-slate-300">
-                        Distance used: <span className="font-semibold">{tripDistanceKm.toFixed(2)} km</span> | Selected
-                        fare: <span className="font-semibold"> {localVehicleFare.selectedFareLabel}</span>
-                      </p>
-                    ) : (
-                      <p className="mt-2 text-[11px] text-slate-600 dark:text-slate-300">
-                        Select both origin and destination to calculate approximate local vechile fares.
-                      </p>
-                    )}
-
-                    {isMatchedSimpaniInformatics && (
-                      <div className="mt-2 rounded-lg border border-emerald-200 bg-emerald-50 p-2 text-[11px] text-emerald-900 dark:border-emerald-900/40 dark:bg-emerald-900/20 dark:text-emerald-100">
-                        <p className="font-semibold">
-                          Bus Route Added: Micro bus from Simpani to Gandaki Hospital (NPR 45)
-                        </p>
-                        <p className="mt-1">Then walk from Gandaki Hospital to Informatics College Pokhara.</p>
-                      </div>
-                    )}
                   </div>
 
                   <button

@@ -22,9 +22,6 @@ const SHORT_TRIP_FARE_NPR = 25;
 const MINIMUM_FARE_NPR = SHORT_TRIP_FARE_NPR;
 const FARE_PER_KM_AFTER_SHORT_TRIP =
   (REFERENCE_FARE_NPR - SHORT_TRIP_FARE_NPR) / (REFERENCE_DISTANCE_KM - SHORT_TRIP_MAX_DISTANCE_KM);
-const SIMPANI_INFORMATICS_BIKE_FARE_NPR = 130;
-const SIMPANI_INFORMATICS_CAR_FARE_NPR = 420;
-const SIMPANI_INFORMATICS_BUS_FARE_NPR = 45;
 
 type FareOption = {
   id: string;
@@ -33,6 +30,8 @@ type FareOption = {
   type: "discount" | "surcharge";
   value: number;
 };
+
+type LocalVehicleType = "indrive-bike" | "indrive-car" | "bus";
 
 type NoRouteGuide = {
   boardingStop: string;
@@ -149,23 +148,6 @@ function estimatePathDistanceKm(path: MapPoint[]): number {
   return Math.max(SHORT_TRIP_MAX_DISTANCE_KM, totalKm);
 }
 
-function normalizeSearchText(value: string): string {
-  return value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
-}
-
-function isSimpaniInformaticsTripByNames(originName: string, destinationName: string): boolean {
-  const originText = normalizeSearchText(originName);
-  const destinationText = normalizeSearchText(destinationName);
-
-  const originHasSimpani = originText.includes("simpani");
-  const destinationHasInformatics =
-    (destinationText.includes("informatics") && destinationText.includes("college")) ||
-    (destinationText.includes("informatics") && destinationText.includes("pokhara"));
-  const destinationHasShalomMarg = destinationText.includes("shalom marg");
-
-  return originHasSimpani && (destinationHasInformatics || destinationHasShalomMarg);
-}
-
 function isGeoapifyRouteResponse(value: unknown): value is GeoapifyRouteResponse {
   if (!value || typeof value !== "object") {
     return false;
@@ -221,6 +203,7 @@ function FarePageContent() {
   const [distanceKm, setDistanceKm] = useState<number>(toNumber(searchParams.get("distanceKm")) ?? 0);
   const [durationMin, setDurationMin] = useState<number>(toNumber(searchParams.get("durationMin")) ?? 0);
   const [selectedOptions, setSelectedOptions] = useState<string[]>([]);
+  const [selectedVehicle, setSelectedVehicle] = useState<LocalVehicleType>("bus");
   const queryDistanceKm = useMemo(() => toNumber(searchParams.get("distanceKm")), [searchParams]);
   const queryDurationMin = useMemo(() => toNumber(searchParams.get("durationMin")), [searchParams]);
 
@@ -248,10 +231,6 @@ function FarePageContent() {
 
   const originName = searchParams.get("originName")?.trim() || "Current location";
   const destinationName = searchParams.get("destinationName")?.trim() || "Destination";
-  const isMatchedSimpaniInformatics = useMemo(
-    () => isSimpaniInformaticsTripByNames(originName, destinationName),
-    [originName, destinationName],
-  );
   const selectedRoute = useMemo(() => {
     const routeId = toNumber(searchParams.get("routeId"));
     if (routeId === null) {
@@ -328,6 +307,7 @@ function FarePageContent() {
             origin,
             destination,
             mode: "drive",
+            vehicleType: selectedVehicle === "bus" ? "bus" : selectedVehicle === "indrive-bike" ? "bike" : "car",
           }),
         });
 
@@ -364,19 +344,26 @@ function FarePageContent() {
     return () => {
       isCancelled = true;
     };
-  }, [origin?.lat, origin?.lng, destination?.lat, destination?.lng, origin, destination, noRouteGuide, selectedRoute, queryDistanceKm, queryDurationMin]);
+  }, [origin?.lat, origin?.lng, destination?.lat, destination?.lng, origin, destination, noRouteGuide, selectedRoute, queryDistanceKm, queryDurationMin, selectedVehicle]);
 
   const baseFare = useMemo(() => {
-    if (isMatchedSimpaniInformatics) {
-      return SIMPANI_INFORMATICS_BUS_FARE_NPR;
+    if (selectedVehicle === "indrive-bike") {
+      // Bike fare: NPR 20 per km with discount
+      return Math.max(20, Math.round(distanceKm * 20));
     }
 
+    if (selectedVehicle === "indrive-car") {
+      // Car fare: NPR 25-30 per km (average 27.5) with discount
+      return Math.max(50, Math.round(distanceKm * 27.5));
+    }
+
+    // Bus fare - use standard calculation or fixed rates for known routes
     if (noRouteGuide) {
       return Math.max(10, noRouteGuide.estimatedFareNpr);
     }
 
     return estimateFareNpr(distanceKm);
-  }, [distanceKm, noRouteGuide, isMatchedSimpaniInformatics]);
+  }, [distanceKm, noRouteGuide, selectedVehicle]);
 
   const maxDiscountRate = useMemo(() => {
     const selectedDiscounts = FARE_OPTIONS.filter(
@@ -396,7 +383,19 @@ function FarePageContent() {
     ).reduce((total, option) => total + option.value, 0);
   }, [selectedOptions]);
 
-  const discountAmount = Math.round(baseFare * maxDiscountRate);
+  const discountAmount = useMemo(() => {
+    const baseDiscount = maxDiscountRate * baseFare;
+
+    // Add vehicle-specific discounts
+    let vehicleDiscount = 0;
+    if (selectedVehicle === "indrive-bike") {
+      vehicleDiscount = Math.min(20, Math.max(10, Math.round(baseFare * 0.1))); // 10-20 NPR discount
+    } else if (selectedVehicle === "indrive-car") {
+      vehicleDiscount = Math.min(20, Math.max(10, Math.round(baseFare * 0.08))); // 10-20 NPR discount
+    }
+
+    return Math.round(baseDiscount + vehicleDiscount);
+  }, [baseFare, maxDiscountRate, selectedVehicle]);
   const totalFare = Math.max(10, Math.round(baseFare - discountAmount + surchargeTotal));
 
   const mapCenter = useMemo<MapPoint>(() => {
@@ -475,6 +474,22 @@ function FarePageContent() {
                   </span>
                 </div>
 
+                {/* Vehicle Selection Dropdown */}
+                <div className="space-y-2">
+                  <p className="text-sm font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                    Choose Your Transport
+                  </p>
+                  <select
+                    value={selectedVehicle}
+                    onChange={(e) => setSelectedVehicle(e.target.value as LocalVehicleType)}
+                    className="w-full rounded-lg border border-slate-200 bg-white p-3 text-sm font-medium text-slate-900 focus:border-primary focus:ring-1 focus:ring-primary dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                  >
+                    <option value="bus">🚌 Bus - Public Transport</option>
+                    <option value="indrive-bike">🏍️ InDrive Bike - Quick & Affordable</option>
+                    <option value="indrive-car">🚗 InDrive Car - Comfortable Ride</option>
+                  </select>
+                </div>
+
                 <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-900">
                   <p className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
                     Trip
@@ -500,19 +515,7 @@ function FarePageContent() {
                   </div>
                 </div>
 
-                {isMatchedSimpaniInformatics && (
-                  <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-900 dark:border-emerald-900/40 dark:bg-emerald-900/20 dark:text-emerald-100">
-                    <p className="font-bold">Fixed Local Rates (Simpani to Informatics)</p>
-                    <p className="mt-1">InDrive Bike: NPR {SIMPANI_INFORMATICS_BIKE_FARE_NPR}</p>
-                    <p className="mt-1">InDrive Car: NPR {SIMPANI_INFORMATICS_CAR_FARE_NPR}</p>
-                    <p className="mt-1">
-                      Bus: Micro bus from Simpani to Gandaki Hospital (NPR {SIMPANI_INFORMATICS_BUS_FARE_NPR}), then
-                      walk to Informatics College Pokhara.
-                    </p>
-                  </div>
-                )}
-
-                {noRouteGuide && (
+                {selectedVehicle === "bus" && noRouteGuide && (
                   <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900 dark:border-amber-900/40 dark:bg-amber-900/20 dark:text-amber-100">
                     <p className="font-bold">No direct route found. Try this bus plan:</p>
                     <p className="mt-1">
@@ -546,57 +549,125 @@ function FarePageContent() {
                   </div>
                 )}
 
-                <div className="space-y-3">
-                  <p className="text-sm font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                    Fare Suggestions (Checkbox)
-                  </p>
-                  {FARE_OPTIONS.map((option) => (
-                    <label
-                      key={option.id}
-                      className="flex cursor-pointer items-center justify-between rounded-xl border border-slate-200 p-3 transition-colors hover:bg-slate-50 dark:border-slate-800 dark:hover:bg-slate-900"
-                    >
-                      <div>
-                        <p className="text-sm font-semibold">{option.label}</p>
-                        <p className="text-xs text-slate-500 dark:text-slate-400">{option.note}</p>
+                {(selectedVehicle === "indrive-bike" || selectedVehicle === "indrive-car") && (
+                  <div className="space-y-4">
+                    <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900 dark:border-blue-900/40 dark:bg-blue-900/20 dark:text-blue-100">
+                      <h4 className="font-bold text-base mb-2">
+                        🚗 Book on InDrive - Nepal's #1 Ride App
+                      </h4>
+                      <p className="mb-2">Get instant rides with real-time pricing and GPS tracking.</p>
+                      <div className="space-y-1 text-xs">
+                        <p>✅ Verified drivers with ratings</p>
+                        <p>✅ Cashless payments (Khalti/eSewa)</p>
+                        <p>✅ 24/7 customer support</p>
+                        <p>✅ Ride tracking & safety features</p>
                       </div>
-                      <input
-                        type="checkbox"
-                        checked={selectedOptions.includes(option.id)}
-                        onChange={() => toggleOption(option.id)}
-                        className="size-4 rounded border-slate-300 text-primary focus:ring-primary"
-                      />
-                    </label>
-                  ))}
-                </div>
+                      <div className="mt-3 p-2 bg-blue-100 dark:bg-blue-900/40 rounded text-xs">
+                        <p className="font-semibold">How to book:</p>
+                        <p>1. Download InDrive app from Play Store/App Store</p>
+                        <p>2. Enter pickup: "{originName}"</p>
+                        <p>3. Enter destination: "{destinationName}"</p>
+                        <p>4. Select {selectedVehicle === "indrive-bike" ? "Bike" : "Car"} option</p>
+                        <p>5. Confirm booking & pay</p>
+                      </div>
+                    </div>
+
+                    <div className="rounded-lg border border-green-200 bg-green-50 p-3 text-sm text-green-900 dark:border-green-900/40 dark:bg-green-900/20 dark:text-green-100">
+                      <p className="font-bold">🎉 Special Discount Applied!</p>
+                      <p className="mt-1">
+                        Get NPR {selectedVehicle === "indrive-bike" ? "10-20" : "10-20"} off on your {selectedVehicle === "indrive-bike" ? "bike" : "car"} ride through our partnership with InDrive.
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {selectedVehicle === "bus" && (
+                  <div className="space-y-3">
+                    <p className="text-sm font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                      Fare Adjustments (Optional)
+                    </p>
+                    {FARE_OPTIONS.map((option) => (
+                      <label
+                        key={option.id}
+                        className="flex cursor-pointer items-center justify-between rounded-xl border border-slate-200 p-3 transition-colors hover:bg-slate-50 dark:border-slate-800 dark:hover:bg-slate-900"
+                      >
+                        <div>
+                          <p className="text-sm font-semibold">{option.label}</p>
+                          <p className="text-xs text-slate-500 dark:text-slate-400">{option.note}</p>
+                        </div>
+                        <input
+                          type="checkbox"
+                          checked={selectedOptions.includes(option.id)}
+                          onChange={() => toggleOption(option.id)}
+                          className="size-4 rounded border-slate-300 text-primary focus:ring-primary"
+                        />
+                      </label>
+                    ))}
+                  </div>
+                )}
 
                 <div className="space-y-2 rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-900">
                   <div className="flex items-center justify-between text-sm">
                     <span className="text-slate-500 dark:text-slate-400">Base Fare</span>
                     <span className="font-medium">NPR {baseFare}</span>
                   </div>
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-slate-500 dark:text-slate-400">Best Discount</span>
-                    <span className="font-medium text-emerald-600">-NPR {discountAmount}</span>
-                  </div>
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-slate-500 dark:text-slate-400">Surcharges</span>
-                    <span className="font-medium">+NPR {Math.round(surchargeTotal)}</span>
-                  </div>
+                  {selectedVehicle === "bus" && (
+                    <>
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-slate-500 dark:text-slate-400">Best Discount</span>
+                        <span className="font-medium text-emerald-600">-NPR {discountAmount}</span>
+                      </div>
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-slate-500 dark:text-slate-400">Surcharges</span>
+                        <span className="font-medium">+NPR {Math.round(surchargeTotal)}</span>
+                      </div>
+                    </>
+                  )}
+                  {(selectedVehicle === "indrive-bike" || selectedVehicle === "indrive-car") && (
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-slate-500 dark:text-slate-400">InDrive Discount</span>
+                      <span className="font-medium text-emerald-600">-NPR {discountAmount}</span>
+                    </div>
+                  )}
                   <div className="flex items-center justify-between border-t border-slate-200 pt-2 dark:border-slate-700">
                     <span className="text-base font-bold">Total Payable</span>
                     <span className="text-xl font-bold text-primary">NPR {totalFare}</span>
                   </div>
+                  {(selectedVehicle === "indrive-bike" || selectedVehicle === "indrive-car") && (
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-2">
+                      * Final price may vary based on InDrive's dynamic pricing and availability
+                    </p>
+                  )}
                 </div>
 
-                <div className="rounded-xl border border-rose-200 bg-rose-50 p-4 dark:border-rose-900/30 dark:bg-rose-900/20">
-                  <p className="text-sm font-bold text-rose-700 dark:text-rose-300">No route available now?</p>
-                  <p className="mt-1 text-xs text-rose-600 dark:text-rose-300/90">
-                    Try changing destination or check nearby stops for the next available bus.
-                  </p>
-                  <button className="mt-3 w-full rounded-lg bg-white px-3 py-2 text-sm font-semibold text-rose-700 transition-colors hover:bg-rose-100 dark:bg-rose-900/40 dark:text-rose-200 dark:hover:bg-rose-900/60">
-                    No route available now
-                  </button>
-                </div>
+                {selectedVehicle === "bus" && (
+                  <div className="rounded-xl border border-rose-200 bg-rose-50 p-4 dark:border-rose-900/30 dark:bg-rose-900/20">
+                    <p className="text-sm font-bold text-rose-700 dark:text-rose-300">No route available now?</p>
+                    <p className="mt-1 text-xs text-rose-600 dark:text-rose-300/90">
+                      Try changing destination or check nearby stops for the next available bus.
+                    </p>
+                    <button className="mt-3 w-full rounded-lg bg-white px-3 py-2 text-sm font-semibold text-rose-700 transition-colors hover:bg-rose-100 dark:bg-rose-900/40 dark:text-rose-200 dark:hover:bg-rose-900/60">
+                      No route available now
+                    </button>
+                  </div>
+                )}
+
+                {(selectedVehicle === "indrive-bike" || selectedVehicle === "indrive-car") && (
+                  <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 dark:border-blue-900/30 dark:bg-blue-900/20">
+                    <p className="text-sm font-bold text-blue-700 dark:text-blue-300">Ready to book your ride?</p>
+                    <p className="mt-1 text-xs text-blue-600 dark:text-blue-300/90">
+                      Download InDrive app and get instant rides with our special discount.
+                    </p>
+                    <div className="mt-3 flex gap-2">
+                      <button className="flex-1 rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-blue-700">
+                        📱 Download InDrive
+                      </button>
+                      <button className="flex-1 rounded-lg bg-white px-3 py-2 text-sm font-semibold text-blue-700 transition-colors hover:bg-blue-100 dark:bg-blue-900/40 dark:text-blue-200 dark:hover:bg-blue-900/60">
+                        📞 Call Driver
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>

@@ -8,6 +8,7 @@ interface RoutingRequestBody {
   origin?: MapPoint;
   destination?: MapPoint;
   mode?: string;
+  vehicleType?: "bus" | "bike" | "car";
 }
 
 function isMapPoint(value: unknown): value is MapPoint {
@@ -43,8 +44,12 @@ export async function POST(request: Request) {
   }
 
   const mode = payload.mode ?? "drive";
+  const vehicleType = payload.vehicleType ?? "car";
   const waypoints = `${payload.origin.lat},${payload.origin.lng}|${payload.destination.lat},${payload.destination.lng}`;
-  const endpoint = `${GEOAPIFY_ROUTING_URL}?waypoints=${encodeURIComponent(waypoints)}&mode=${encodeURIComponent(mode)}&details=route_details&apiKey=${encodeURIComponent(apiKey)}`;
+
+  // Get multiple route alternatives
+  const alternatives = vehicleType === "bus" ? "3" : "2"; // More alternatives for bus to find longer routes
+  const endpoint = `${GEOAPIFY_ROUTING_URL}?waypoints=${encodeURIComponent(waypoints)}&mode=${encodeURIComponent(mode)}&details=route_details&alternatives=${alternatives}&apiKey=${encodeURIComponent(apiKey)}`;
 
   try {
     const response = await fetch(endpoint, { cache: "no-store" });
@@ -60,32 +65,64 @@ export async function POST(request: Request) {
       );
     }
 
-    const firstFeature = Array.isArray(data.features) ? data.features[0] : null;
-    const properties = firstFeature?.properties as Record<string, unknown> | undefined;
-    const geometry = firstFeature?.geometry as { coordinates?: unknown[] } | undefined;
+    const features = Array.isArray(data.features) ? data.features : [];
 
-    const rawCoordinates = Array.isArray(geometry?.coordinates) ? geometry.coordinates : [];
-    const path: MapPoint[] = rawCoordinates
-      .map((coordinate) => {
-        if (!Array.isArray(coordinate) || coordinate.length < 2) {
-          return null;
-        }
+    if (features.length === 0) {
+      return NextResponse.json(
+        { error: "No routes found for this trip." },
+        { status: 404 },
+      );
+    }
 
-        const lon = Number(coordinate[0]);
-        const lat = Number(coordinate[1]);
+    // Process all routes and select the best one based on vehicle type
+    const routes = features.map((feature: any) => {
+      const properties = feature?.properties as Record<string, unknown> | undefined;
+      const geometry = feature?.geometry as { coordinates?: unknown[] } | undefined;
 
-        if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
-          return null;
-        }
+      const rawCoordinates = Array.isArray(geometry?.coordinates) ? geometry.coordinates : [];
+      const path: MapPoint[] = rawCoordinates
+        .map((coordinate) => {
+          if (!Array.isArray(coordinate) || coordinate.length < 2) {
+            return null;
+          }
 
-        return { lat, lng: lon };
-      })
-      .filter((point): point is MapPoint => point !== null);
+          const lon = Number(coordinate[0]);
+          const lat = Number(coordinate[1]);
+
+          if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
+            return null;
+          }
+
+          return { lat, lng: lon };
+        })
+        .filter((point): point is MapPoint => point !== null);
+
+      return {
+        distanceMeters: typeof properties?.distance === "number" ? properties.distance : 0,
+        durationSeconds: typeof properties?.time === "number" ? properties.time : 0,
+        path,
+      };
+    });
+
+    // Select route based on vehicle type
+    let selectedRoute: typeof routes[0];
+
+    if (vehicleType === "bus") {
+      // For bus: select the longest route (more comprehensive coverage)
+      selectedRoute = routes.reduce((longest: any, current: any) =>
+        current.distanceMeters > longest.distanceMeters ? current : longest
+      );
+    } else {
+      // For bike/car: select the shortest route (most efficient)
+      selectedRoute = routes.reduce((shortest: any, current: any) =>
+        current.distanceMeters < shortest.distanceMeters ? current : shortest
+      );
+    }
 
     const result: GeoapifyRouteResponse = {
-      distanceMeters: typeof properties?.distance === "number" ? properties.distance : 0,
-      durationSeconds: typeof properties?.time === "number" ? properties.time : 0,
-      path,
+      distanceMeters: selectedRoute.distanceMeters,
+      durationSeconds: selectedRoute.durationSeconds,
+      path: selectedRoute.path,
     };
 
     return NextResponse.json(result, { status: 200 });

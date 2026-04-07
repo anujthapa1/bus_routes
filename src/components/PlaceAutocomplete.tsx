@@ -19,6 +19,22 @@ export default function PlaceAutocomplete({
   const [results, setResults] = useState<GeoapifyPlace[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
+  const [dropdownPosition, setDropdownPosition] = useState<'below' | 'above'>('below');
+
+  useEffect(() => {
+    const checkPosition = () => {
+      const input = document.activeElement as HTMLElement;
+      if (input && input === document.querySelector('input')) {
+        const rect = input.getBoundingClientRect();
+        const viewportHeight = window.innerHeight;
+        const isInLowerHalf = rect.top > viewportHeight / 2;
+        setDropdownPosition(isInLowerHalf ? 'above' : 'below');
+      }
+    };
+
+    window.addEventListener('resize', checkPosition);
+    return () => window.removeEventListener('resize', checkPosition);
+  }, []);
 
   const fetchPlaces = useCallback(async (text: string, signal?: AbortSignal): Promise<GeoapifyPlace[]> => {
     const response = await fetch(`/api/geocode/autocomplete?text=${encodeURIComponent(text)}`, {
@@ -95,7 +111,19 @@ export default function PlaceAutocomplete({
     <div className="relative w-full">
       <input
         value={query}
-        onFocus={() => setIsOpen(true)}
+        onFocus={() => {
+          setIsOpen(true);
+          const checkPosition = () => {
+            const input = document.activeElement as HTMLElement;
+            if (input && input === document.querySelector('input')) {
+              const rect = input.getBoundingClientRect();
+              const viewportHeight = window.innerHeight;
+              const isInLowerHalf = rect.top > viewportHeight / 2;
+              setDropdownPosition(isInLowerHalf ? 'above' : 'below');
+            }
+          };
+          checkPosition();
+        }}
         onBlur={() => {
           window.setTimeout(() => setIsOpen(false), 120);
         }}
@@ -128,7 +156,9 @@ export default function PlaceAutocomplete({
       />
 
       {isOpen && (isLoading || results.length > 0) && (
-        <div className="absolute left-0 right-0 top-[calc(100%+6px)] z-30 max-h-56 overflow-y-auto rounded-lg border border-slate-200 bg-white shadow-xl dark:border-slate-700 dark:bg-slate-900">
+        <div className={`absolute left-0 right-0 z-30 max-h-56 overflow-y-auto rounded-lg border border-slate-200 bg-white shadow-xl dark:border-slate-700 dark:bg-slate-900 ${
+          dropdownPosition === 'above' ? 'bottom-[calc(100%+6px)]' : 'top-[calc(100%+6px)]'
+        }`}>
           {isLoading && <p className="px-3 py-2 text-xs text-slate-500">Searching...</p>}
 
           {!isLoading &&
